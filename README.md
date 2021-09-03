@@ -11,6 +11,9 @@ pip install git+https://github.com/marvinweber/gitlab-bulk-project-export.git
 gitlab-bulk-project-export --help
 ```
 
+Exports are limited to projects the use is a member of. Otherwise scheduling and
+downloading of exports would not even be possible.
+
 ## Rate Limit
 GitLab has a (default) rate limit for project export schedules of 6 per minute.
 As an administrator, you can increase the limit in the admin control section.  
