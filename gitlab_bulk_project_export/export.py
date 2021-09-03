@@ -53,7 +53,7 @@ def export(gitlab_instance, access_token, output_dir, dry_run):
     done = False
     while not done:
         page += 1
-        response = http.get(f'{gitlab_api_url}/projects', params={'page': page})
+        response = http.get(f'{gitlab_api_url}/projects', params={'page': page, 'membership': 1})
         projects = json.loads(response.content)
 
         for project in projects:
