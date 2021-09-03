@@ -66,7 +66,7 @@ def export(gitlab_instance, access_token, output_dir, dry_run):
 
         done = response.headers.get('X-Page') == response.headers.get('X-Total-Pages')
 
-    click.echo('Exporting the following projects:')
+    click.echo(f'Trying to exporting the following ({len(projects_to_export)}) projects:')
     for project in projects_to_export:
         click.echo(f'{project["id"]}: {project["path_namespaced"]}')
 
@@ -74,13 +74,23 @@ def export(gitlab_instance, access_token, output_dir, dry_run):
         click.echo('Dry Run: Quit! Nothing was exported.')
         return
 
+    scheduled_projects = []
+    failed_scheduled_projects = []
     with click.progressbar(projects_to_export,
-                           label='Schedule exports for all projects',
+                           label='Trying to schedule exports for projects',
                            length=len(projects_to_export)) as bar:
         for project in bar:
             export_request = http.post(f'{gitlab_api_url}/projects/{project["id"]}/export')
-            assert export_request.status_code == 202, \
-                f'Export of project {project["id"]} could not be scheduled!'
+            if export_request.status_code != 202:
+                reason = json.loads(export_request.content)
+                project.update({'reason': reason['message']})
+                failed_scheduled_projects.append(project)
+            else:
+                scheduled_projects.append(project)
+    if len(failed_scheduled_projects) > 0:
+        click.echo('WARNING: Export for following projects could not be scheduled:')
+        for project in failed_scheduled_projects:
+            click.echo(f'{project["name"]} ({project["id"]}): {project["reason"]}')
 
     # Create output directory
     os.makedirs(path.join(path.abspath(output_dir),
@@ -88,10 +98,10 @@ def export(gitlab_instance, access_token, output_dir, dry_run):
 
     finished_ids = []
     iteration = 1
-    with click.progressbar(length=len(projects_to_export),
+    with click.progressbar(length=len(scheduled_projects),
                            label='Waiting for projects to be exported and download') as bar:
-        while len(finished_ids) != len(projects_to_export):
-            for project in projects_to_export:
+        while len(finished_ids) != len(scheduled_projects):
+            for project in scheduled_projects:
                 if project['id'] in finished_ids:
                     continue
 
