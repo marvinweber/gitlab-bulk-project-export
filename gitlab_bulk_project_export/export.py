@@ -29,12 +29,11 @@ from urllib3.util import Retry
     help='Directory where to put the exported projects into (relative or absolute path).',
     prompt=True,
     envvar='GBPE_OUTPUT_DIR')
-def export(gitlab_instance, access_token, output_dir):
-    output_dir = path.join(path.abspath(output_dir),
-                           f'gitlab-export-{time.strftime("%Y-%m-%d-%H-%M-%S")}')
-    if not path.exists(output_dir):
-        os.makedirs(output_dir)
-
+@click.option(
+    '--dry-run', is_flag=True,
+    help='Only show projects that would be exported, neither schedule or donwnload exports.',
+    default=False, show_default=True)
+def export(gitlab_instance, access_token, output_dir, dry_run):
     gitlab_api_url = f'{gitlab_instance}/api/v4'
     retry_strategy = Retry(
         total=10,
@@ -67,6 +66,14 @@ def export(gitlab_instance, access_token, output_dir):
 
         done = response.headers.get('X-Page') == response.headers.get('X-Total-Pages')
 
+    click.echo('Exporting the following projects:')
+    for project in projects_to_export:
+        click.echo(f'{project["id"]}: {project["path_namespaced"]}')
+
+    if dry_run:
+        click.echo('Dry Run: Quit! Nothing was exported.')
+        return
+
     with click.progressbar(projects_to_export,
                            label='Schedule exports for all projects',
                            length=len(projects_to_export)) as bar:
@@ -74,6 +81,10 @@ def export(gitlab_instance, access_token, output_dir):
             export_request = http.post(f'{gitlab_api_url}/projects/{project["id"]}/export')
             assert export_request.status_code == 202, \
                 f'Export of project {project["id"]} could not be scheduled!'
+
+    # Create output directory
+    os.makedirs(path.join(path.abspath(output_dir),
+                          f'gitlab-export-{time.strftime("%Y-%m-%d-%H-%M-%S")}'), exist_ok=True)
 
     finished_ids = []
     iteration = 1
