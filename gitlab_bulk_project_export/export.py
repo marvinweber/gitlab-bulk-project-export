@@ -60,7 +60,7 @@ def export(gitlab_instance, access_token, output_dir, dry_run):
             projects_to_export.append({
                 'id': project['id'],
                 'name': project['name'],
-                'exported': False,
+                'path': project['path'],
                 'path_namespaced': project['path_with_namespace'],
             })
 
@@ -92,10 +92,8 @@ def export(gitlab_instance, access_token, output_dir, dry_run):
         for project in failed_scheduled_projects:
             click.echo(f'{project["name"]} ({project["id"]}): {project["reason"]}')
 
-    # Create output directory
-    os.makedirs(path.join(path.abspath(output_dir),
-                          f'gitlab-export-{time.strftime("%Y-%m-%d-%H-%M-%S")}'), exist_ok=True)
-
+    output_dir = path.join(path.abspath(output_dir),
+                           f'gitlab-export-{time.strftime("%Y-%m-%d-%H-%M-%S")}')
     finished_ids = []
     iteration = 1
     with click.progressbar(length=len(scheduled_projects),
@@ -111,12 +109,15 @@ def export(gitlab_instance, access_token, output_dir, dry_run):
                     continue
 
                 download = http.get(f'{gitlab_api_url}/projects/{project["id"]}/export/download')
-                cs_value, cs_params = cgi.parse_header(download.headers.get('Content-Disposition'))
+                filename = f'{project["path"]}_{project["id"]}.tar.gz'
+                if 'Content-Disposition' in download.headers:
+                    _, cd_params = cgi.parse_header(download.headers.get('Content-Disposition'))
+                    filename = cd_params['filename']
                 namespace = project['path_namespaced']
                 project_export_dir = path.join(output_dir, namespace)
                 os.makedirs(project_export_dir)
 
-                with open(path.join(project_export_dir, cs_params['filename']), 'wb') as f:
+                with open(path.join(project_export_dir, filename), 'wb') as f:
                     f.write(download.content)
 
                 finished_ids.append(project['id'])
